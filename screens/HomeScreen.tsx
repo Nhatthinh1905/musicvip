@@ -31,7 +31,7 @@ const HomeScreen = ({ navigation }) => {
     };
     const fetchTracks = async () => {
       const data = await getAllTrackApi();
-      setTracks(data.slice(18, 22));
+      setTracks(data.slice(9, 12));
     };
     const fetchAlbums = async () => {
       const data = await getAllAlbumApi();
