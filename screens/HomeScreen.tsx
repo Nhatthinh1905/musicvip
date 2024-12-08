@@ -4,83 +4,106 @@ import {
   Text,
   View,
   Image,
-  Pressable,
   FlatList,
+  Pressable,
   TouchableOpacity,
+  ScrollView,
 } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { ScrollView } from "react-native";
+import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { getAllTrackApi } from "../service/track";
-import { Track } from "../interface/Track";
 import { getAllArtistApi } from "../service/artist";
 import { getAllAlbumApi } from "../service/album";
-import { Artist } from "../interface/Artist";
-import { Album } from "../interface/Album";
+import TrackPlayer, { useTrackPlayerEvents, Event } from "react-native-track-player";
 
 const HomeScreen = ({ navigation }) => {
   const [artists, setArtists] = useState([]);
   const [tracks, setTracks] = useState([]);
   const [albums, setAlbums] = useState([]);
   const [greeting, setGreeting] = useState("");
+  const [currentTrack, setCurrentTrack] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
 
   useEffect(() => {
-    const fetchArtists = async () => {
-      const data = await getAllArtistApi();
-      setArtists(data.slice(0, 5));
-    };
-    const fetchTracks = async () => {
-      const data = await getAllTrackApi();
-      setTracks(data.slice(18, 22));
-    };
-    const fetchAlbums = async () => {
-      const data = await getAllAlbumApi();
-      setAlbums(data);
+    const fetchData = async () => {
+      const artistsData = await getAllArtistApi();
+      setArtists(artistsData.slice(4, 8));
+
+      const tracksData = await getAllTrackApi();
+      setTracks(tracksData.slice(8, 12));
+
+      const albumsData = await getAllAlbumApi();
+      setAlbums(albumsData);
+
+      const hours = new Date().getHours();
+      if (hours >= 0 && hours < 12) {
+        setGreeting("Good Morning");
+      } else if (hours >= 12 && hours < 17) {
+        setGreeting("Good Afternoon");
+      } else {
+        setGreeting("Good Evening");
+      }
     };
 
-    fetchArtists();
-    fetchTracks();
-    fetchAlbums();
-
-    const currentTime = new Date();
-    const hours = currentTime.getHours();
-
-    if (hours >= 0 && hours < 12) {
-      setGreeting("Good Morning");
-    } else if (hours >= 12 && hours < 17) {
-      setGreeting("Good Afternoon");
-    } else {
-      setGreeting("Good Evening");
-    }
+    fetchData();
   }, []);
 
-  const handleAllSongsPress = () => {
-    navigation.navigate("ListSong");
-  };
-  const handleAllArtistsPress = () => {
-    navigation.navigate("ListArtist");
-  };
-  const handleAllAlbumsPress = () => {
-    navigation.navigate("ListAlbum"); // Navigate to the All Albums screen
+  const handleTrackPress = (track) => {
+    navigation.navigate("PlayScreen", { track, tracks });
   };
 
   const handleArtistPress = (artist: Artist) => {
     navigation.navigate("ArtistDetail", { artist });
   };
 
-  const handleTrackPress = (track: Track) => {
-    navigation.navigate("PlayScreen", { track, tracks });
-  };
-
   const handleAlbumPress = (album: Album) => {
     navigation.navigate("AlbumDetail", { album });
   };
 
-  const handleNavigateToPlayScreen = () => {
-    navigation.navigate("PlayScreen", { track: tracks[0], tracks });
+  const handlePlayPause = async () => {
+    if (isPlaying) {
+      await TrackPlayer.pause();
+    } else {
+      await TrackPlayer.play();
+    }
+    setIsPlaying(!isPlaying);
   };
 
-  const renderArtist = ({ item }: { item: Artist }) => {
+  const handleNextTrack = async () => {
+    const nextIndex = (currentTrackIndex + 1) % tracks.length;
+    setCurrentTrackIndex(nextIndex);
+    await TrackPlayer.skip(nextIndex);
+    const nextTrack = await TrackPlayer.getTrack(nextIndex);
+    setCurrentTrack(nextTrack);
+    if (!isPlaying) {
+      await TrackPlayer.play();
+      setIsPlaying(true);
+    }
+  };
+
+  const handlePreviousTrack = async () => {
+    const prevIndex = (currentTrackIndex - 1 + tracks.length) % tracks.length;
+    setCurrentTrackIndex(prevIndex);
+    await TrackPlayer.skip(prevIndex);
+    const prevTrack = await TrackPlayer.getTrack(prevIndex);
+    setCurrentTrack(prevTrack);
+    if (!isPlaying) {
+      await TrackPlayer.play();
+      setIsPlaying(true);
+    }
+  };
+
+  useTrackPlayerEvents([Event.PlaybackTrackChanged, Event.PlaybackState], (event) => {
+    if (event.type === Event.PlaybackTrackChanged) {
+      TrackPlayer.getTrack(event.nextTrack).then((track) => setCurrentTrack(track));
+    }
+    if (event.type === Event.PlaybackState) {
+      setIsPlaying(event.state === TrackPlayer.STATE_PLAYING);
+    }
+  });
+
+  const renderArtist = ({ item }) => {
     return (
       <Pressable onPress={() => handleArtistPress(item)} style={styles.itemContainer}>
         <Image style={styles.imageArtist} source={{ uri: item.imageUrl }} />
@@ -89,7 +112,7 @@ const HomeScreen = ({ navigation }) => {
     );
   };
 
-  const renderTrack = ({ item }: { item: Track }) => {
+  const renderTrack = ({ item }) => {
     return (
       <Pressable onPress={() => handleTrackPress(item)} style={styles.itemContainer}>
         <Image style={styles.imageArtist} source={{ uri: item.imageUrl }} />
@@ -98,7 +121,7 @@ const HomeScreen = ({ navigation }) => {
     );
   };
 
-  const renderAlbum = ({ item }: { item: Album }) => {
+  const renderAlbum = ({ item }) => {
     return (
       <Pressable onPress={() => handleAlbumPress(item)} style={styles.itemContainer}>
         <Image style={styles.imageArtist} source={{ uri: item.imageUrl }} />
@@ -112,27 +135,20 @@ const HomeScreen = ({ navigation }) => {
       <ScrollView style={styles.scrollView}>
         <View style={styles.header}>
           <Text style={styles.greetingText}>{greeting}</Text>
-          <TouchableOpacity onPress={handleNavigateToPlayScreen}>
-            <MaterialCommunityIcons
-              name="play-circle"
-              size={50}
-              color="white"
-            />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.navigationButtons}>
-          <Pressable style={styles.navButton} onPress={handleAllArtistsPress}>
+          <Pressable style={styles.navButton} onPress={() => navigation.navigate("ListArtist")}>
             <MaterialCommunityIcons name="account-group" size={24} color="white" />
-            <Text style={styles.navButtonText}>All Artists</Text>
+            <Text style={styles.navButtonText}>Artists</Text>
           </Pressable>
-          <Pressable style={styles.navButton} onPress={handleAllSongsPress}>
+          <Pressable style={styles.navButton} onPress={() => navigation.navigate("ListSong")}>
             <MaterialCommunityIcons name="music" size={24} color="white" />
-            <Text style={styles.navButtonText}>All Tracks</Text>
+            <Text style={styles.navButtonText}>Tracks</Text>
           </Pressable>
-          <Pressable style={styles.navButton} onPress={handleAllAlbumsPress}>
+          <Pressable style={styles.navButton} onPress={() => navigation.navigate("ListAlbum")}>
             <MaterialCommunityIcons name="album" size={24} color="white" />
-            <Text style={styles.navButtonText}>All Albums</Text>
+            <Text style={styles.navButtonText}>Albums</Text>
           </Pressable>
         </View>
 
@@ -169,6 +185,31 @@ const HomeScreen = ({ navigation }) => {
           showsHorizontalScrollIndicator={false}
         />
       </ScrollView>
+
+      {currentTrack && (
+        <View style={styles.musicControlContainer}>
+          <Image source={{ uri: currentTrack.artwork }} style={styles.trackArt} />
+          <View style={styles.trackInfo}>
+            <Text style={styles.trackTitle}>{currentTrack.title}</Text>
+            <Text style={styles.trackArtist}>{currentTrack.artist}</Text>
+          </View>
+          <View style={styles.controls}>
+            <TouchableOpacity onPress={handlePreviousTrack}>
+              <MaterialCommunityIcons name="skip-previous" size={30} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handlePlayPause} style={styles.playPauseButton}>
+              <MaterialCommunityIcons
+                name={isPlaying ? "pause-circle" : "play-circle"}
+                size={40}
+                color="white"
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleNextTrack}>
+              <MaterialCommunityIcons name="skip-next" size={30} color="white" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </LinearGradient>
   );
 };
@@ -178,68 +219,104 @@ export default HomeScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#131313",
   },
   scrollView: {
     flex: 1,
-    marginBottom: 20,
   },
   header: {
-    padding: 20,
-    flexDirection: "row",
+    paddingTop: 40,
+    paddingHorizontal: 20,
     alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#131313",
+    marginBottom: 20,
   },
   greetingText: {
-    fontSize: 30,
-    fontWeight: "bold",
+    fontSize: 32,
     color: "white",
+    fontWeight: "bold",
   },
   navigationButtons: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginVertical: 20,
+    justifyContent: "space-evenly",
+    marginBottom: 20,
   },
   navButton: {
-    flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#202020",
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderRadius: 30,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "#1a1a1a",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
     elevation: 5,
   },
   navButtonText: {
     color: "white",
+    marginTop: 5,
     fontSize: 14,
-    marginLeft: 8,
-    fontWeight: "bold",
   },
   sectionHeader: {
-    marginTop: 20,
-    paddingHorizontal: 20,
+    marginHorizontal: 20,
+    marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 18,
     color: "white",
+    fontWeight: "bold",
   },
   itemContainer: {
-    marginHorizontal: 10,
-    marginBottom: 20,
+    marginRight: 15,
     alignItems: "center",
   },
   imageArtist: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 10,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: "#fff",
+    marginBottom: 5,
   },
   artistName: {
     color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
     textAlign: "center",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  musicControlContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#131313",
+    padding: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#444",
+  },
+  trackArt: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+  },
+  trackInfo: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  trackTitle: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  trackArtist: {
+    color: "white",
+    fontSize: 12,
+  },
+  controls: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  playPauseButton: {
+    marginHorizontal: 15,
   },
 });

@@ -46,9 +46,11 @@ function PlayScreen({ route,navigation }) {
         artwork: track.imageUrl,
       }));
       const currentTrackIndex = tracks.findIndex((track:Track) => track.id == currentTrack.id);
-      await TrackPlayer.skip(currentTrackIndex)
       await TrackPlayer.add(tracksToAdd);
+      await TrackPlayer.skip(currentTrackIndex);
+      await TrackPlayer.play();
       await TrackPlayer.setRepeatMode(RepeatMode.Queue);
+
     }
   }
 

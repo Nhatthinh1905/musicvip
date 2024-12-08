@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:8080/api/v1/"
+const BASE_URL = "https://music-backend-665c9bff5105.herokuapp.com/api/v1/"
 
 export const registerUrl =  BASE_URL.concat("auth/register")
 export const loginUrl = BASE_URL.concat("auth/login")
